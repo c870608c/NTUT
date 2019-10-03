@@ -84,6 +84,8 @@
 #define MAX_RR_INTERVAL                  500                                        /**< Maximum RR interval as returned by the simulated measurement function. */
 #define RR_INTERVAL_INCREMENT            1                                          /**< Value by which the RR interval is incremented/decremented for each call to the simulated measurement function. */
 
+#define SENSOR_DELAY_MEAS_INTERVAL      APP_TIMER_TICKS(100, APP_TIMER_PRESCALER)
+
 #define SENSOR_CONTACT_DETECTED_INTERVAL APP_TIMER_TICKS(5000, APP_TIMER_PRESCALER) /**< Sensor Contact Detected toggle interval (ticks). */
 
 #define MIN_CONN_INTERVAL               MSEC_TO_UNITS(100, UNIT_1_25_MS)            /**< Minimum acceptable connection interval (0.5 seconds). */
@@ -137,14 +139,14 @@ APP_TIMER_DEF(m_battery_timer_id);                                              
 APP_TIMER_DEF(m_heart_rate_timer_id);                                               /**< Heart rate measurement timer. */
 APP_TIMER_DEF(m_rr_interval_timer_id);                                              /**< RR interval timer. */                 /**< RR interval timer. */
 APP_TIMER_DEF(m_sensor_contact_timer_id);                                           /**< Sensor contact detected timer. */
+APP_TIMER_DEF(m_sensor_delay_timer_id); 
 
-static dm_application_instance_t         m_app_handle;                              /**< Application identifier allocated by device manager */
+//static dm_application_instance_t         m_app_handle;                              /**< Application identifier allocated by device manager */
 
 #ifdef BLE_DFU_APP_SUPPORT
 static ble_dfu_t                         m_dfus;                                    /**< Structure used to identify the DFU service. */
 #endif // BLE_DFU_APP_SUPPORT
-																	 
-
+																	
 /**@brief Function for assert macro callback.
  *
  * @details This function will be called in case of an assert in the SoftDevice.
@@ -267,6 +269,54 @@ static void rr_interval_timeout_handler(void * p_context)
     }
 }
 
+static void sensor_delay_meas_timeout_handler(void * p_context)
+{
+	uint32_t err_code;
+
+	
+	if(m_lbs.mode == m_lbs.mode_state)
+	{
+	   if(m_lbs.counter1_state < 30)
+	   {
+		    m_lbs.counter1_state ++;
+	    	if(m_lbs.button_state == 1)
+		    {
+			     m_lbs.counter2_state ++;
+	    	}
+	   }
+	   else if(m_lbs.counter1_state >= 30)
+	   {
+	      m_lbs.counter1_state = 0;
+	    	if(m_lbs.counter2_state >= 20)
+	      {
+		       m_lbs.sensor_state = 1;
+	      }
+	      else 
+		    {
+		       m_lbs.sensor_state = 0;
+		    }
+				m_lbs.counter2_state = 0;
+		    //if((sensor ^ mode) != out)
+				{
+		       err_code = ble_lbs_on_sensor_change(&m_lbs, m_lbs.button_state);
+           if ((err_code != NRF_SUCCESS) &&
+               (err_code != NRF_ERROR_INVALID_STATE) &&
+               (err_code != BLE_ERROR_NO_TX_PACKETS) &&
+               (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+               )
+           {
+              APP_ERROR_HANDLER(err_code);
+           }
+			  }
+	   }
+  }
+  else
+	{
+		m_lbs.mode = m_lbs.mode_state;
+		m_lbs.counter1_state = 0;
+		m_lbs.counter2_state = 0;
+	}		
+}
 
 /**@brief Function for handling the Sensor Contact Detected timer timeout.
  *
@@ -311,6 +361,11 @@ static void timers_init(void)
     err_code = app_timer_create(&m_rr_interval_timer_id,
                                 APP_TIMER_MODE_REPEATED,
                                 rr_interval_timeout_handler);
+    APP_ERROR_CHECK(err_code);
+	
+	  err_code = app_timer_create(&m_sensor_delay_timer_id,
+                                APP_TIMER_MODE_REPEATED,
+                                sensor_delay_meas_timeout_handler);
     APP_ERROR_CHECK(err_code);
 
     err_code = app_timer_create(&m_sensor_contact_timer_id,
@@ -478,10 +533,10 @@ static void advertising_init(void)
     scanrsp.uuids_complete.uuid_cnt = sizeof(adv_uuids) / sizeof(adv_uuids[0]);
     scanrsp.uuids_complete.p_uuids  = adv_uuids;
 		
-		ble_adv_modes_config_t options = {0};
+		/*ble_adv_modes_config_t options = {0};
     options.ble_adv_fast_enabled  = BLE_ADV_FAST_ENABLED;
     options.ble_adv_fast_interval = APP_ADV_INTERVAL;
-    options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
+    options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;*/
 
     err_code = ble_advdata_set(&advdata, &scanrsp);
     APP_ERROR_CHECK(err_code);
@@ -514,10 +569,10 @@ static void services_init(void)
     ble_lbs_init_t init;
 	  ble_hrs_init_t hrs_init;
     ble_bas_init_t bas_init;
-    ble_dis_init_t dis_init;
+    //ble_dis_init_t dis_init;
     uint8_t        body_sensor_location;
 
-	 // Initialize GPIO Service.
+	  // Initialize GPIO Service.
     init.led_write_handler = led_write_handler;
 
     err_code = ble_lbs_init(&m_lbs, &init);
@@ -650,6 +705,9 @@ static void application_timers_start(void)
     err_code = app_timer_start(m_rr_interval_timer_id, RR_INTERVAL_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 
+	  err_code = app_timer_start(m_sensor_delay_timer_id, SENSOR_DELAY_MEAS_INTERVAL, NULL);
+    APP_ERROR_CHECK(err_code);
+	
     err_code = app_timer_start(m_sensor_contact_timer_id, SENSOR_CONTACT_DETECTED_INTERVAL, NULL);
     APP_ERROR_CHECK(err_code);
 }
@@ -733,7 +791,7 @@ static void sleep_mode_enter(void)
  *
  * @param[in] ble_adv_evt  Advertising event.
  */
-static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
+/*static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 {
     uint32_t err_code;
 
@@ -749,7 +807,7 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
         default:
             break;
     }
-}
+}*/
 
 
 /**@brief Function for handling the Application's BLE Stack events.
@@ -793,6 +851,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 
             err_code = app_button_enable();
             APP_ERROR_CHECK(err_code);
+				
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
@@ -942,9 +1001,6 @@ void bsp_event_handler(bsp_event_t event)
                 APP_ERROR_CHECK(err_code);
             }
             break;
-	   /* case BSP_EVENT_KEY_0:
-            LEDS_ON(BSP_LED_2_MASK);
-            break;*/
 
         default:
             break;
@@ -956,7 +1012,7 @@ void bsp_event_handler(bsp_event_t event)
  *
  * @param[in] p_evt  Data associated to the device manager event.
  */
-static uint32_t device_manager_evt_handler(dm_handle_t const * p_handle,
+/*static uint32_t device_manager_evt_handler(dm_handle_t const * p_handle,
                                            dm_event_t const  * p_event,
                                            ret_code_t        event_result)
 {
@@ -970,44 +1026,7 @@ static uint32_t device_manager_evt_handler(dm_handle_t const * p_handle,
 #endif // BLE_DFU_APP_SUPPORT
 
     return NRF_SUCCESS;
-}
-
-
-/**@brief Function for the Device Manager initialization.
- *
- * @param[in] erase_bonds  Indicates whether bonding information should be cleared from
- *                         persistent storage during initialization of the Device Manager.
- */
-static void device_manager_init(bool erase_bonds)
-{
-    uint32_t               err_code;
-    dm_init_param_t        init_param = {.clear_persistent_data = erase_bonds};
-    dm_application_param_t register_param;
-
-    // Initialize persistent storage module.
-    err_code = pstorage_init();
-    APP_ERROR_CHECK(err_code);
-
-    err_code = dm_init(&init_param);
-    APP_ERROR_CHECK(err_code);
-
-    memset(&register_param.sec_param, 0, sizeof(ble_gap_sec_params_t));
-
-    register_param.sec_param.bond         = SEC_PARAM_BOND;
-    register_param.sec_param.mitm         = SEC_PARAM_MITM;
-    register_param.sec_param.lesc         = SEC_PARAM_LESC;
-    register_param.sec_param.keypress     = SEC_PARAM_KEYPRESS;
-    register_param.sec_param.io_caps      = SEC_PARAM_IO_CAPABILITIES;
-    register_param.sec_param.oob          = SEC_PARAM_OOB;
-    register_param.sec_param.min_key_size = SEC_PARAM_MIN_KEY_SIZE;
-    register_param.sec_param.max_key_size = SEC_PARAM_MAX_KEY_SIZE;
-    register_param.evt_handler            = device_manager_evt_handler;
-    register_param.service_type           = DM_PROTOCOL_CNTXT_GATT_SRVR_ID;
-
-    err_code = dm_register(&m_app_handle, &register_param);
-    APP_ERROR_CHECK(err_code);
-}
-
+}*/
 
 /**@brief Function for initializing the Advertising functionality.
  */
@@ -1028,13 +1047,6 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
             break;
 				case LEDBUTTON_MODE_PIN:
             err_code = ble_lbs_on_mode_change(&m_lbs, button_action);
-            if (err_code != NRF_SUCCESS &&
-                err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
-                err_code != NRF_ERROR_INVALID_STATE)
-            {
-                APP_ERROR_CHECK(err_code);
-            }
-						err_code = ble_lbs_on_mode1_change(&m_lbs, button_action);
             if (err_code != NRF_SUCCESS &&
                 err_code != BLE_ERROR_INVALID_CONN_HANDLE &&
                 err_code != NRF_ERROR_INVALID_STATE)
@@ -1070,19 +1082,7 @@ static void buttons_init(void)
 		
 }
 
-/*static void mode_init(void)
-{
-    uint32_t err_code;
-	
-	  static app_button_cfg_t mode[] =
-    {
-        {LEDBUTTON_MODE_PIN, false, BUTTON_PULL, button_event_handler}
-    };
 
-    err_code = app_button_init(mode, sizeof(mode) / sizeof(mode[0]),
-                               BUTTON_DETECTION_DELAY);
-    APP_ERROR_CHECK(err_code);
-}*/
 /**@brief Function for the Power Manager.
  */
 static void power_manage(void)
@@ -1098,15 +1098,13 @@ static void power_manage(void)
 int main(void)
 {
 	  uint32_t err_code;
-    bool erase_bonds;  
+    //bool erase_bonds;  
 	
     // Initialize.
     leds_init();
     timers_init();
     buttons_init();
-	// mode_init();
     ble_stack_init();
-	  device_manager_init(erase_bonds);
     gap_params_init();
     services_init();
     advertising_init();
