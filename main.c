@@ -296,7 +296,7 @@ static void sensor_delay_meas_timeout_handler(void * p_context)
 		       m_lbs.sensor_state = 0;
 		    }
 				m_lbs.counter2_state = 0;
-		    //if((sensor ^ mode) != out)
+		    if((m_lbs.mode_state ^ m_lbs.sensor_state) != m_lbs.out_state)
 				{
 		       err_code = ble_lbs_on_sensor_change(&m_lbs, m_lbs.button_state);
            if ((err_code != NRF_SUCCESS) &&
