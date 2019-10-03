@@ -69,9 +69,13 @@ struct ble_lbs_s
     uint8_t                     uuid_type;           /**< UUID type for the LED Button Service. */
     uint16_t                    conn_handle;         /**< Handle of the current connection (as provided by the BLE stack). BLE_CONN_HANDLE_INVALID if not in a connection. */
     ble_lbs_led_write_handler_t led_write_handler;   /**< Event handler to be called when the LED Characteristic is written. */
-	  uint8_t                     button_state; 
+	  uint8_t                     button_state;	
 	  uint8_t                     mode_state; 
-	  uint8_t                     out_state;
+	  uint8_t                     mode; 
+   	uint8_t                     out_state;
+  	uint8_t                     sensor_state;
+	  uint8_t                     counter1_state;
+  	uint8_t                     counter2_state;	
 };
 
 /**@brief Function for initializing the LED Button Service.
@@ -103,7 +107,7 @@ void ble_lbs_on_ble_evt(ble_lbs_t * p_lbs, ble_evt_t * p_ble_evt);
  */
 uint32_t ble_lbs_on_button_change(ble_lbs_t * p_lbs, uint8_t button_state);
 uint32_t ble_lbs_on_mode_change(ble_lbs_t * p_lbs, uint8_t button_state);
-uint32_t ble_lbs_on_mode1_change(ble_lbs_t * p_lbs, uint8_t button_state);
+uint32_t ble_lbs_on_sensor_change(ble_lbs_t * p_lbs, uint8_t button_state);
 
 
 #endif // BLE_LBS_H__
