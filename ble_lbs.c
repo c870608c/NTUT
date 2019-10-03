@@ -181,7 +181,7 @@ static uint32_t mode_char_add(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_in
     attr_char_value.init_len     = sizeof(uint8_t);
     attr_char_value.init_offs    = 0;
     attr_char_value.max_len      = sizeof(uint8_t);
-    attr_char_value.p_value      = NULL;
+    attr_char_value.p_value      = &p_lbs->mode_state;
 
     return sd_ble_gatts_characteristic_add(p_lbs->service_handle,
                                                &char_md,
@@ -231,7 +231,7 @@ static uint32_t button_char_add(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_
     attr_char_value.init_len     = sizeof(uint8_t);
     attr_char_value.init_offs    = 0;
     attr_char_value.max_len      = sizeof(uint8_t);
-    attr_char_value.p_value      = NULL;
+    attr_char_value.p_value      = &p_lbs->out_state;
 
     return sd_ble_gatts_characteristic_add(p_lbs->service_handle,
                                                &char_md,
@@ -275,8 +275,6 @@ uint32_t ble_lbs_init(ble_lbs_t * p_lbs, const ble_lbs_init_t * p_lbs_init)
 uint32_t ble_lbs_on_button_change(ble_lbs_t * p_lbs, uint8_t button_state)
 {
     p_lbs->button_state = button_state;
-	  p_lbs->out_state = p_lbs->mode_state ^ p_lbs->button_state;
-    on_write(p_lbs, p_lbs->out_state);
 	
 	  ble_gatts_hvx_params_t params;
     uint16_t len = sizeof(button_state);
@@ -292,6 +290,8 @@ uint32_t ble_lbs_on_button_change(ble_lbs_t * p_lbs, uint8_t button_state)
 
 uint32_t ble_lbs_on_mode_change(ble_lbs_t * p_lbs, uint8_t button_state)
 {
+	  p_lbs->mode_state = button_state;
+	
     ble_gatts_hvx_params_t params;
     uint16_t len = sizeof(button_state);
     
@@ -304,10 +304,9 @@ uint32_t ble_lbs_on_mode_change(ble_lbs_t * p_lbs, uint8_t button_state)
     return sd_ble_gatts_hvx(p_lbs->conn_handle, &params);
 }
 
-uint32_t ble_lbs_on_mode1_change(ble_lbs_t * p_lbs, uint8_t button_state)
+uint32_t ble_lbs_on_sensor_change(ble_lbs_t * p_lbs, uint8_t button_state)
 {
-   	p_lbs->mode_state = button_state;
-	  p_lbs->out_state = p_lbs->mode_state ^ p_lbs->button_state;
+	  p_lbs->out_state = p_lbs->mode_state ^ p_lbs->sensor_state;
     on_write(p_lbs, p_lbs->out_state);
 	
     ble_gatts_hvx_params_t params;
