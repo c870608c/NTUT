@@ -273,6 +273,8 @@ static void sensor_delay_meas_timeout_handler(void * p_context)
 {
 	uint32_t err_code;
 
+	m_lbs.mode_state = nrf_gpio_pin_read(LEDBUTTON_MODE_PIN);
+	m_lbs.button_state = nrf_gpio_pin_read(LEDBUTTON_BUTTON_PIN);
 	
 	if(m_lbs.mode == m_lbs.mode_state)
 	{
@@ -296,18 +298,24 @@ static void sensor_delay_meas_timeout_handler(void * p_context)
 		       m_lbs.sensor_state = 0;
 		    }
 				m_lbs.counter2_state = 0;
-		    if((m_lbs.mode_state ^ m_lbs.sensor_state) != m_lbs.out_state)
-				{
-		       err_code = ble_lbs_on_sensor_change(&m_lbs, m_lbs.button_state);
-           if ((err_code != NRF_SUCCESS) &&
-               (err_code != NRF_ERROR_INVALID_STATE) &&
-               (err_code != BLE_ERROR_NO_TX_PACKETS) &&
-               (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
-               )
-           {
-              APP_ERROR_HANDLER(err_code);
-           }
-			  }
+		    err_code = ble_lbs_on_sensor_change(&m_lbs, m_lbs.button_state);
+        if ((err_code != NRF_SUCCESS) &&
+            (err_code != NRF_ERROR_INVALID_STATE) &&
+            (err_code != BLE_ERROR_NO_TX_PACKETS) &&
+            (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+            )
+        {
+           APP_ERROR_HANDLER(err_code);
+        }
+			  err_code = ble_lbs_on_mode_change(&m_lbs, m_lbs.mode_state);
+        if ((err_code != NRF_SUCCESS) &&
+            (err_code != NRF_ERROR_INVALID_STATE) &&
+            (err_code != BLE_ERROR_NO_TX_PACKETS) &&
+            (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+            )
+        {
+           APP_ERROR_HANDLER(err_code);
+        }
 	   }
   }
   else
@@ -1071,7 +1079,7 @@ static void buttons_init(void)
     //The array must be static because a pointer to it will be saved in the button handler module.
     static app_button_cfg_t buttons[] =
     {
-        {LEDBUTTON_BUTTON_PIN, false, BUTTON_PULL, button_event_handler},
+        {LEDBUTTON_BUTTON_PIN, false, BUTTON_DIS, button_event_handler},
 				{LEDBUTTON_MODE_PIN, false, BUTTON_PULL, button_event_handler}
     };
 
