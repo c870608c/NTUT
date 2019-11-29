@@ -46,6 +46,11 @@
 #include "bsp.h"
 #include "ble_gap.h"
 #include "bsp_btn_ble.h"
+#include "nrf_drv_saadc.h"
+#include "app_uart.h"
+
+#define UART_TX_BUF_SIZE 256 /**< UART TX buffer size. */
+#define UART_RX_BUF_SIZE 1   /**< UART RX buffer size. */
 
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                          /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
@@ -61,7 +66,7 @@
 
 #define BATTERY_RATE_PIN                SPIM1_MOSI_PIN
 
-#define DEVICE_NAME                     "NTUT_LAB312_Product"                           /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                     "NTUT_LAB321_Product"                           /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME               "NTUTEE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define APP_ADV_INTERVAL                64                                          /**< The advertising interval (in units of 0.625 ms; this value corresponds to 40 ms). */
@@ -185,12 +190,16 @@ static void leds_init(void)
 uint8_t adc=0;
 static void battery_level_update(void)
 {
+	  nrf_saadc_value_t  saadc_val;
+	  float  val;
     uint32_t err_code;
     uint8_t  battery_level;
 
-	  
-    battery_level = adc;//(uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
-    adc ++;//= nrf_gpio_pin_read(LEDBUTTON_BUTTON_PIN);
+	  nrf_drv_saadc_sample_convert(0,&saadc_val);
+	  val = saadc_val * 360 /1024-70;
+	  /*if(val>= 0x64) battery_level=100;
+	  else if (val<=0) battery_level=0;
+    else*/ battery_level = val;
     err_code = ble_bas_battery_level_update(&m_bas, battery_level);
     if ((err_code != NRF_SUCCESS) &&
         //(err_code != NRF_ERROR_INVALID_STATE) &&
@@ -1095,6 +1104,52 @@ static void buttons_init(void)
 		
 }
 
+void uart_events_handler(app_uart_evt_t * p_event)
+{
+}
+
+
+void uart_config(void)
+{
+    uint32_t                     err_code;
+    const app_uart_comm_params_t comm_params =
+    {
+        RX_PIN_NUMBER,
+        TX_PIN_NUMBER,
+        RTS_PIN_NUMBER,
+        CTS_PIN_NUMBER,
+        APP_UART_FLOW_CONTROL_DISABLED,
+        false,
+        UART_BAUDRATE_BAUDRATE_Baud115200
+    };
+
+    APP_UART_FIFO_INIT(&comm_params,
+                       UART_RX_BUF_SIZE,
+                       UART_TX_BUF_SIZE,
+                       uart_events_handler,
+                       APP_IRQ_PRIORITY_LOW,
+                       err_code);
+
+    APP_ERROR_CHECK(err_code);
+}
+
+void saadc_callback(nrf_drv_saadc_evt_t const * p_event)
+{
+//   
+}
+
+void saadc_init(void)
+{
+    ret_code_t err_code;
+    nrf_saadc_channel_config_t channel_config =
+            NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN1);
+    err_code = nrf_drv_saadc_init(NULL, saadc_callback);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_drv_saadc_channel_init(0, &channel_config);
+    APP_ERROR_CHECK(err_code);
+
+}
 
 /**@brief Function for the Power Manager.
  */
@@ -1123,6 +1178,8 @@ int main(void)
     advertising_init();
 	  sensor_simulator_init();
     conn_params_init();
+	  uart_config();
+	  saadc_init();
 
     // Start execution.
 	  advertising_start();
